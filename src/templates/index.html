@@ -63,6 +63,7 @@
                 <div class="preset-container">
                     <span class="preset-badge" onclick="setPreset('https://upload.wikimedia.org/wikipedia/commons/4/43/Infiltrating_ductal_carcinoma_of_the_breast_histopathology_%282%29.jpg', 'TCGA-BRCA (Breast Invasive Carcinoma)')">TCGA-BRCA (Breast)</span>
                     <span class="preset-badge" onclick="setPreset('https://upload.wikimedia.org/wikipedia/commons/d/da/Adenocarcinoma_of_lung_histopathology_%281%29.jpg', 'TCGA-LUAD (Lung Adenocarcinoma)')">TCGA-LUAD (Lung)</span>
+                    <span class="preset-badge" onclick="setPreset('https://upload.wikimedia.org/wikipedia/commons/b/b5/Adenocarcinoma_of_the_colon_histopathology_%282%29.jpg', 'TCGA-COAD (Colon Adenocarcinoma)')">TCGA-COAD (Colon)</span>
                 </div>
             </div>
         </div>
@@ -122,9 +123,20 @@
 
         function displayImage(source) {
             const preview = document.getElementById('preview');
+            const uploadPrompt = document.getElementById('uploadPrompt');
+            
+            preview.onerror = function() {
+                preview.style.display = 'none';
+                uploadPrompt.style.display = 'block';
+                uploadPrompt.innerHTML = `❌ <strong>Failed to render asset.</strong><br><span style="font-size:0.8rem;color:#a4a4b5;">The repository URL requires authentication or isn't a browser-friendly image format (.jpg/.png).</span>`;
+            };
+
+            preview.onload = function() {
+                uploadPrompt.style.display = 'none';
+                preview.style.display = 'block';
+            };
+
             preview.src = source;
-            preview.style.display = 'block';
-            document.getElementById('uploadPrompt').style.display = 'none';
         }
 
         async function sendMessage() {
