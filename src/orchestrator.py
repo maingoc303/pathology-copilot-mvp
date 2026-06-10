@@ -10,65 +10,75 @@ class CasePayload(BaseModel):
 
 class PathologyOrchestrator:
     def __init__(self):
+        # Read the Hugging Face access token from your Render dashboard settings
         self.hf_token = os.getenv("HF_TOKEN")
         self.client = InferenceClient(token=self.hf_token)
-        # Defining distinct vision and text models for absolute stability
-        self.vision_model = "Salesforce/blip-vqa-base"
-        self.text_model = "meta-llama/Meta-Llama-3-8B-Instruct"
+        
+        # Mapping our emulation endpoints on the Hugging Face Hub
+        self.judith_text_brain = "meta-llama/Meta-Llama-3-8B-Instruct"
+        self.pathchat_vision_bridge = "Salesforce/blip-vqa-base"
 
     async def process_case(self, payload: CasePayload) -> Dict[str, Any]:
-        print(f"[Orchestrator] Multi-modal parsing sequence triggered for: {payload.case_id}")
+        print(f"[Orchestrator] Running Hugging Face PathChat/Judith Pipeline for: {payload.case_id}")
         
         if not self.hf_token:
-            return {"status": "error", "detail": "HF_TOKEN key is missing from Render Environment Configurations."}
+            return {
+                "status": "error", 
+                "detail": "HF_TOKEN environment variable is completely missing from your Render Dashboard configurations."
+            }
 
-        # 1. Grab image and query parameters
         image_source = payload.image_metadata.get("image_url", "")
         user_query = payload.clinical_history
 
-        # --- FIX: Smarter Agent Routing Mechanism ---
-        # If no image url is present, or if it's a huge local data chunk, route it to standard Chat Completion
-        if not image_source or image_source.startswith("data:image") or "wikipedia" not in image_source:
-            print("[Agent Route] No clean remote image link found. Defaulting to Text LLM Pipeline...")
-            try:
-                # Ask Llama-3 the question directly using standard chat completions
-                messages = [{"role": "user", "content": f"You are a helpful Pathology AI Assistant. Answer the user's clinical query: {user_query}"}]
-                chat_completion = self.client.chat_completion(
-                    model=self.text_model,
-                    messages=messages,
-                    max_tokens=150
-                )
-                answer_text = chat_completion.choices[0].message.content
-                return {
-                    "status": "success",
-                    "case_id": payload.case_id,
-                    "model_output": [{"generated_text": answer_text}]
-                }
-            except Exception as text_err:
-                print(f"[Text LLM Error]: {str(text_err)}")
-                return {"status": "error", "detail": f"Text LLM Engine reported: {str(text_err)}"}
+        # Isolate heavy raw text strings to prevent urllib/socket drops
+        has_valid_image = image_source and not image_source.startswith("data:image")
 
-        # 2. Vision Path: Run standard Visual Question Answering for clean image URLs
-        print(f"[Agent Route] Valid cloud image link found. Querying Multi-modal Visual pipeline...")
         try:
-            answer = self.client.visual_question_answering(
-                image=image_source,
-                question=user_query,
-                model=self.vision_model
-            )
-            
-            # Extract standard label/answer attributes from output list
-            if isinstance(answer, list) and len(answer) > 0:
-                model_text = answer[0].get("answer", str(answer))
+            # --- PATHCHAT VISION WORKFLOW ---
+            if has_valid_image:
+                print(f"[PathChat Pipeline] Directing tissue matrix payload to visual QA layer...")
+                
+                # Formulate a structured instruction-tuned prompt mirroring Mahmood Lab datasets
+                tuned_query = f"System Persona: PathChat Pathology Generalist AI. Task: Analyze this H&E specimen. Query: {user_query}"
+                
+                answer = self.client.visual_question_answering(
+                    image=image_source,
+                    question=tuned_query,
+                    model=self.pathchat_vision_bridge
+                )
+                
+                model_text = answer[0].get("answer", str(answer)) if isinstance(answer, list) else str(answer)
+                formatted_response = f"**[PathChat Evaluation]** Micro-architectural analysis suggests: {model_text}."
+
+            # --- JUDITH AGENTIC WORKFLOW ---
             else:
-                model_text = str(answer)
+                print(f"[Judith Pipeline] Directing conversational text query to clinical reasoning brain...")
+                
+                system_instruction = (
+                    "You are Judith, an agentic pathology coordinator model. You specialize in clinical criteria evaluation, "
+                    "diagnostic break-downs, and recommending algorithmic next-steps for medical datasets."
+                )
+                
+                chat_completion = self.client.chat_completion(
+                    model=self.judith_text_brain,
+                    messages=[
+                        {"role": "system", "content": system_instruction},
+                        {"role": "user", "content": user_query}
+                    ],
+                    max_tokens=250
+                )
+                
+                formatted_response = chat_completion.choices[0].message.content
 
             return {
                 "status": "success",
                 "case_id": payload.case_id,
-                "model_output": [{"generated_text": f"Based on the histology slice features, the matching target indicates: {model_text}."}]
+                "model_output": [{"generated_text": formatted_response}]
             }
 
-        except Exception as vision_err:
-            print(f"[Vision Engine Error]: {str(vision_err)}")
-            return {"status": "error", "detail": f"Vision Model Hub reported: {str(vision_err)}"}
+        except Exception as e:
+            print(f"[HuggingFace Pipeline Exception]: {str(e)}")
+            return {
+                "status": "error", 
+                "detail": f"Hugging Face hub returned an operation error: {str(e)}"
+            }
