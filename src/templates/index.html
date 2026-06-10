@@ -163,9 +163,18 @@
                 const data = await response.json();
                 let aiResponse = "";
                 
-                // --- FIX: Safely parse either a successful model run or structured server errors ---
                 if (data.status === "success") {
-                    aiResponse = `<strong>Analysis:</strong> ${data.model_output[0]?.generated_text || JSON.stringify(data.model_output)}`;
+                    // Get the raw text output from the model
+                    let rawText = data.model_output[0]?.generated_text || "";
+                    
+                    // Convert simple Markdown bolding (**text**) into strong HTML tags (<strong>text</strong>)
+                    rawText = rawText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                    
+                    // --- FIX: Safely translate Markdown line breaks (\n) into browser HTML layouts ---
+                    rawText = rawText.replace(/\n\n/g, '</p><p style="margin-top: 8px;">');
+                    rawText = rawText.replace(/\n/g, '<br>');
+                    
+                    aiResponse = `<p>${rawText}</p>`;
                 } else {
                     aiResponse = `<strong>System Alert:</strong> ${data.detail || JSON.stringify(data)}`;
                 }
