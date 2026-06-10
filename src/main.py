@@ -4,7 +4,7 @@ from src.orchestrator import PathologyOrchestrator, CasePayload
 app = FastAPI(title="Pathology Co-Pilot MVP", version="1.0.0")
 orchestrator = PathologyOrchestrator()
 
-@app.get("/")
+@app.get("/", methods=["GET", "HEAD"])
 def read_root():
     return {
         "message": "Welcome to the Pathology Co-Pilot MVP API",
