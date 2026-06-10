@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import Dict, Any
+import os
 
 class CasePayload(BaseModel):
     case_id: str
