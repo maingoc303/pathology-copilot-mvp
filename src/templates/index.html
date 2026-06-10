@@ -95,8 +95,22 @@
         }
 
         function loadRemoteImage() {
-            const url = document.getElementById('remoteUrl').value.trim();
-            if(url) { displayImage(url); currentImageTarget = url; }
+            let url = document.getElementById('remoteUrl').value.trim();
+            if(url) {
+                // --- FIX: Automatically convert standard HuggingFace viewer links to direct data source URLs ---
+                if (url.includes("huggingface.co/") && url.includes("/blob/")) {
+                    url = url.replace("/blob/", "/resolve/");
+                    document.getElementById('remoteUrl').value = url;
+                }
+
+                // Check if user is trying to pass a raw tiff file to a standard html img tag
+                if (url.toLowerCase().endsWith('.tiff') || url.toLowerCase().endsWith('.tif')) {
+                    logSystemMessage(`⚠️ Format Notice: Browser image tags cannot display raw .tiff files natively. Try using a .jpg or .png conversion, or passing this reference URL direct to the model core.`);
+                }
+
+                displayImage(url);
+                currentImageTarget = url;
+            }
         }
 
         function setPreset(url, description) {
