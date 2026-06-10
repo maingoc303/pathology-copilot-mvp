@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from src.orchestrator import PathologyOrchestrator, CasePayload
+import os
 
 app = FastAPI(title="Pathology Co-Pilot MVP", version="1.0.0")
 orchestrator = PathologyOrchestrator()
