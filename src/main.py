@@ -4,13 +4,15 @@ from src.orchestrator import PathologyOrchestrator, CasePayload
 app = FastAPI(title="Pathology Co-Pilot MVP", version="1.0.0")
 orchestrator = PathologyOrchestrator()
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 def read_root():
-    return {
-        "message": "Welcome to the Pathology Co-Pilot MVP API",
-        "docs_url": "/docs",
-        "health_check": "/health"
-    }
+    # Resolve the path to the template file dynamically
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    template_path = os.path.join(current_dir, "templates", "index.html")
+    
+    with open(template_path, "r") as file:
+        html_content = file.read()
+    return HTMLResponse(content=html_content, status_code=200)
 
 @app.get("/health")
 def health_check():
