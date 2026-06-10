@@ -9,16 +9,13 @@
         body, html { height: 100%; overflow: hidden; background-color: #121214; color: #e1e1e6; }
         
         .workspace { display: flex; height: 100vh; width: 100vw; }
-
-        /* Left Side: Image Upload & Cloud API Connection */
-        .left-panel { width: 50%; border-right: 1px solid #29292e; display: flex; flex-direction: column; padding: 20px; background-color: #1a1a1e; gap: 20px; justify-content: flex-start; overflow-y: auto; }
+        .left-panel { width: 50%; border-right: 1px solid #29292e; display: flex; flex-direction: column; padding: 20px; background-color: #1a1a1e; gap: 20px; overflow-y: auto; }
         .panel-title { font-size: 1.1rem; font-weight: bold; color: #e1e1e6; margin-bottom: 5px; }
         
         .upload-box { border: 2px dashed #4b4b52; border-radius: 8px; width: 100%; height: 350px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: border-color 0.2s; position: relative; background-color: #121214; }
         .upload-box:hover { border-color: #04d361; }
         .preview-img { max-width: 100%; max-height: 100%; display: none; object-fit: contain; border-radius: 4px; padding: 10px; }
 
-        /* Cloud API Fetcher Controls */
         .api-box { background-color: #121214; border: 1px solid #29292e; border-radius: 8px; padding: 20px; width: 100%; }
         .input-group { display: flex; gap: 10px; margin-top: 10px; }
         .api-input { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #29292e; background-color: #1a1a1e; color: #fff; font-size: 0.9rem; }
@@ -30,7 +27,6 @@
         .preset-badge { background-color: #202024; border: 1px solid #29292e; padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; cursor: pointer; color: #a4a4b5; }
         .preset-badge:hover { border-color: #04d361; color: #fff; }
 
-        /* Right Side: Chat Panel */
         .right-panel { width: 50%; display: flex; flex-direction: column; background-color: #121214; }
         .chat-header { padding: 20px; border-bottom: 1px solid #29292e; font-weight: bold; font-size: 1.1rem; color: #04d361; }
         .chat-history { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
@@ -51,7 +47,6 @@
     <div class="workspace">
         <div class="left-panel">
             <div class="panel-title">Pathology Slide Core Asset</div>
-            
             <div class="upload-box" id="uploadBox" onclick="if(event.target === this || event.target.id==='uploadPrompt') document.getElementById('fileInput').click()">
                 <p id="uploadPrompt">Drag & drop or click to upload local H&E Slide Image</p>
                 <img id="preview" class="preview-img" src="" alt="Slide Preview">
@@ -60,18 +55,14 @@
 
             <div class="api-box">
                 <div style="font-size: 0.9rem; font-weight: 600; color: #04d361;">Connect Live Pathology Repositories</div>
-                <div style="font-size: 0.8rem; color: #a4a4b5; margin-top: 3px;">Stream H&E whole slide data instances directly from HuggingFace / TCGA Datasets</div>
-                
                 <div class="input-group">
-                    <input type="text" id="remoteUrl" class="api-input" placeholder="Enter remote image array/source URL...">
+                    <input type="text" id="remoteUrl" class="api-input" placeholder="Enter remote image URL...">
                     <button class="btn-secondary" onclick="loadRemoteImage()">Fetch API</button>
                 </div>
-
                 <div style="font-size: 0.8rem; font-weight: 600; color: #e1e1e6; margin-top: 15px;">Quick TCGA Reference Presets:</div>
                 <div class="preset-container">
-                    <span class="preset-badge" onclick="setPreset('https://upload.wikimedia.org/wikipedia/commons/4/43/Infiltrating_ductal_carcinoma_of_the_breast_histopathology_%282%29.jpg', 'TCGA-BRCA (Breast Invasive Carcinoma) - Infiltrating ductal pathology architecture.')">TCGA-BRCA (Breast)</span>
-                    <span class="preset-badge" onclick="setPreset('https://upload.wikimedia.org/wikipedia/commons/d/da/Adenocarcinoma_of_lung_histopathology_%281%29.jpg', 'TCGA-LUAD (Lung Adenocarcinoma) - Proliferation of atypical glandular constructs.')">TCGA-LUAD (Lung)</span>
-                    <span class="preset-badge" onclick="setPreset('https://upload.wikimedia.org/wikipedia/commons/e/ec/Clear_cell_renal_cell_carcinoma_histopathology_%281%29.jpg', 'TCGA-KIRC (Kidney Renal Clear Cell) - Sheets of cells clear cytoplasm backdrop.')">TCGA-KIRC (Kidney)</span>
+                    <span class="preset-badge" onclick="setPreset('https://upload.wikimedia.org/wikipedia/commons/4/43/Infiltrating_ductal_carcinoma_of_the_breast_histopathology_%282%29.jpg', 'TCGA-BRCA (Breast Invasive Carcinoma)')">TCGA-BRCA (Breast)</span>
+                    <span class="preset-badge" onclick="setPreset('https://upload.wikimedia.org/wikipedia/commons/d/da/Adenocarcinoma_of_lung_histopathology_%281%29.jpg', 'TCGA-LUAD (Lung Adenocarcinoma)')">TCGA-LUAD (Lung)</span>
                 </div>
             </div>
         </div>
@@ -79,17 +70,17 @@
         <div class="right-panel">
             <div class="chat-header">PathChat Co-Pilot Evaluation Environment</div>
             <div class="chat-history" id="chatHistory">
-                <div class="message ai-msg">System initialized. Upload an image asset or select a repository preset from the TCGA integration matrix to stream multi-modal workflows.</div>
+                <div class="message ai-msg">System initialized. Provide input context or select a preset to evaluate.</div>
             </div>
             <div class="chat-input-container">
-                <textarea class="chat-input" id="userInput" rows="2" placeholder="Enter case clinical history or query..."></textarea>
+                <textarea class="chat-input" id="userInput" rows="2" placeholder="Enter query..."></textarea>
                 <button class="send-btn" onclick="sendMessage()">Send</button>
             </div>
         </div>
     </div>
 
     <script>
-        let currentImageTarget = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Histopathology_of_biliary_gland_hamartoma.jpg/320px-Histopathology_of_biliary_gland_hamartoma.jpg"; // Default fallback
+        let currentImageTarget = "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Histopathology_of_biliary_gland_hamartoma.jpg/320px-Histopathology_of_biliary_gland_hamartoma.jpg";
 
         function handleImage(input) {
             const file = input.files[0];
@@ -97,7 +88,7 @@
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     displayImage(e.target.result);
-                    currentImageTarget = e.target.result; // Dynamic base64 data string
+                    currentImageTarget = e.target.result;
                 }
                 reader.readAsDataURL(file);
             }
@@ -105,19 +96,14 @@
 
         function loadRemoteImage() {
             const url = document.getElementById('remoteUrl').value.trim();
-            if(url) {
-                displayImage(url);
-                currentImageTarget = url;
-                logSystemMessage(`Fetched remote file coordinate successfully from endpoint layout.`);
-            }
+            if(url) { displayImage(url); currentImageTarget = url; }
         }
 
         function setPreset(url, description) {
             document.getElementById('remoteUrl').value = url;
             displayImage(url);
             currentImageTarget = url;
-            document.getElementById('userInput').value = `Clinical Evaluation request regarding: ${description}`;
-            logSystemMessage(`Connected to repository array sequence. Loaded slide parameters onto active viewer configuration.`);
+            document.getElementById('userInput').value = `Perform diagnostic review on this specimen: ${description}`;
         }
 
         function displayImage(source) {
@@ -125,12 +111,6 @@
             preview.src = source;
             preview.style.display = 'block';
             document.getElementById('uploadPrompt').style.display = 'none';
-        }
-
-        function logSystemMessage(text) {
-            const history = document.getElementById('chatHistory');
-            history.innerHTML += `<div class="message ai-msg" style="border-left: 3px solid #04d361;"><em>${text}</em></div>`;
-            history.scrollTop = history.scrollHeight;
         }
 
         async function sendMessage() {
@@ -148,26 +128,25 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        case_id: "TCGA-" + Math.floor(1000 + Math.random() * 9000),
+                        case_id: "CASE-" + Math.floor(Math.random() * 10000),
                         clinical_history: query,
-                        image_metadata: { 
-                            stain: "H&E",
-                            image_url: currentImageTarget.substring(0, 500) // Pass reference/data snippet safely
-                        }
+                        image_metadata: { stain: "H&E", image_url: currentImageTarget }
                     })
                 });
-                const data = await response.json();
                 
+                const data = await response.json();
                 let aiResponse = "";
-                if(data.status === "success") {
-                    aiResponse = `<strong>Model Output:</strong> ${data.model_output[0]?.generated_text || JSON.stringify(data.model_output)}`;
+                
+                // --- FIX: Safely parse either a successful model run or structured server errors ---
+                if (data.status === "success") {
+                    aiResponse = `<strong>Analysis:</strong> ${data.model_output[0]?.generated_text || JSON.stringify(data.model_output)}`;
                 } else {
-                    aiResponse = `<strong>Prompt Compiled:</strong> ${data.fallback_prompt || data.prompt}`;
+                    aiResponse = `<strong>System Alert:</strong> ${data.detail || JSON.stringify(data)}`;
                 }
 
                 history.innerHTML += `<div class="message ai-msg">${aiResponse}</div>`;
             } catch (err) {
-                history.innerHTML += `<div class="message ai-msg">Error communicating with orchestrator service.</div>`;
+                history.innerHTML += `<div class="message ai-msg"><strong>Error:</strong> Frontend network execution breakdown.</div>`;
             }
             history.scrollTop = history.scrollHeight;
         }
