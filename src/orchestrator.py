@@ -41,7 +41,7 @@ class PathologyOrchestrator:
             if profile.get('attached_document_raw'):
                     ehr_context += f"• Attached Diagnostic File Contents:\n{profile.get('attached_document_raw')}\n"
                     
-                ehr_context += "----------------------------------------------------------\n"
+            ehr_context += "----------------------------------------------------------\n"
         except Exception as e:
             print(f"[Orchestrator Parse Error Log]: {str(e)}")
             pass
