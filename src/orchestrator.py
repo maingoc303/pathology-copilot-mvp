@@ -1,4 +1,5 @@
 import os
+import json
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
 from huggingface_hub import InferenceClient
@@ -16,25 +17,49 @@ class PathologyOrchestrator:
 
     async def process_case(self, payload: CasePayload) -> Dict[str, Any]:
         if not self.hf_token:
-            return {"status": "error", "detail": "HF_TOKEN environment variable is completely missing on Render."}
+            return {"status": "error", "detail": "HF_TOKEN key is missing from Render configurations."}
 
         image_source = payload.image_metadata.get("image_url", "")
         roi_snapshot_detected = "roi_snapshot" in payload.image_metadata and payload.image_metadata["roi_snapshot"] is not None
-        user_query = payload.clinical_history
+        
+        # Safely extract incoming conversational content or EHR structural data dumps
+        user_prompt = payload.clinical_history
+        ehr_context = ""
+
+        try:
+            # If the frontend packaged the metadata as structured JSON, parse it cleanly
+            parsed_history = json.loads(payload.clinical_history)
+            user_prompt = parsed_history.get("user_prompt", "")
+            profile = parsed_history.get("ehr_profile", {})
+            
+            ehr_context = (
+                f"--- ELECTRONIC HEALTH RECORD (EHR) REGISTERED PROFILE ---\n"
+                f"• Patient Demographics: Age {profile.get('age', 'N/A')} | Sex: {profile.get('sex', 'N/A')}\n"
+                f"• Molecular/Biomarker Assays: {profile.get('biomarkers', 'None listed')}\n"
+                f"• Pathological Tumoral Staging: {profile.get('staging', 'N/A')}\n"
+                f"• Background History Logs: {profile.get('clinical_notes', 'None recorded')}\n"
+                f"----------------------------------------------------------\n"
+            )
+        except Exception:
+            # Standard conversational text fallback if JSON format is absent
+            pass
 
         system_instruction = (
-            "You are PathChat, a state-of-the-art computational pathology generalist AI. Evaluate "
-            "the provided case files, annotations, and spatial ROI captures to provide high-quality diagnostic guidance."
+            "You are PathChat, a world-class multimodal computational pathology AI generalist assistant. "
+            "Cross-reference the explicit EHR profile parameters with the specified tissue specimen metrics "
+            "and requested spatial query to generate professional, accurate clinical insights."
         )
 
-        # Build structural injection string context
-        prompt_payload = f"Case Identifier: {payload.case_id}\n"
-        prompt_payload += f"Base Specimen Whole Slide URL: {image_source}\n"
-        
+        # Build highly robust clinical instruction bundle
+        prompt_payload = f"Case Study ID: {payload.case_id}\n"
+        if ehr_context:
+            prompt_payload += ehr_context
+            
+        prompt_payload += f"Base Whole Slide Image: {image_source}\n"
         if roi_snapshot_detected:
-            prompt_payload += "Spatial Zoom State: User has isolated a high-power field Region of Interest (ROI) view canvas for this question.\n"
-        
-        prompt_payload += f"Pathology Assessment Inquiry: {user_query}\n\nFormulate professional analysis report:"
+            prompt_payload += "Spatial Annotation: User has isolated a high-power field focus block coordinate region.\n"
+            
+        prompt_payload += f"Diagnostic User Query: {user_prompt}\n\nFormulate Pathology Assessment Report:"
 
         try:
             chat_completion = self.client.chat_completion(
@@ -43,8 +68,8 @@ class PathologyOrchestrator:
                     {"role": "system", "content": system_instruction},
                     {"role": "user", "content": prompt_payload}
                 ],
-                max_tokens=400,
-                temperature=0.3
+                max_tokens=450,
+                temperature=0.2
             )
             
             response_text = chat_completion.choices[0].message.content
@@ -54,4 +79,4 @@ class PathologyOrchestrator:
                 "model_output": [{"generated_text": response_text}]
             }
         except Exception as e:
-            return {"status": "error", "detail": f"Hugging Face core cluster failure: {str(e)}"}
+            return {"status": "error", "detail": f"Hugging Face Inference Cluster failed: {str(e)}"}
