@@ -13,7 +13,9 @@ class PathologyOrchestrator:
     def __init__(self):
         self.hf_token = os.getenv("HF_TOKEN")
         self.client = InferenceClient(token=self.hf_token)
-        self.model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
+        
+        # --- FIX: Updated target path identifier to use the active production cluster ---
+        self.model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 
     async def process_case(self, payload: CasePayload) -> Dict[str, Any]:
         if not self.hf_token:
@@ -22,12 +24,10 @@ class PathologyOrchestrator:
         image_source = payload.image_metadata.get("image_url", "")
         roi_snapshot_detected = "roi_snapshot" in payload.image_metadata and payload.image_metadata["roi_snapshot"] is not None
         
-        # Safely extract incoming conversational content or EHR structural data dumps
         user_prompt = payload.clinical_history
         ehr_context = ""
 
         try:
-            # If the frontend packaged the metadata as structured JSON, parse it cleanly
             parsed_history = json.loads(payload.clinical_history)
             user_prompt = parsed_history.get("user_prompt", "")
             profile = parsed_history.get("ehr_profile", {})
@@ -36,12 +36,11 @@ class PathologyOrchestrator:
                 f"--- ELECTRONIC HEALTH RECORD (EHR) REGISTERED PROFILE ---\n"
                 f"• Patient Demographics: Age {profile.get('age', 'N/A')} | Sex: {profile.get('sex', 'N/A')}\n"
                 f"• Molecular/Biomarker Assays: {profile.get('biomarkers', 'None listed')}\n"
-                f"• Pathological Tumoral Staging: {profile.get('staging', 'N/A')}\n"
-                f"• Background History Logs: {profile.get('clinical_notes', 'None recorded')}\n"
+                f"• Background History Logs: {profile.get('summary_notes', 'None recorded')}\n"
+                if profile.get('attached_document_raw') : f"• Attached Diagnostic File Contents:\n{profile.get('attached_document_raw')}\n" else ""
                 f"----------------------------------------------------------\n"
             )
         except Exception:
-            # Standard conversational text fallback if JSON format is absent
             pass
 
         system_instruction = (
@@ -50,7 +49,6 @@ class PathologyOrchestrator:
             "and requested spatial query to generate professional, accurate clinical insights."
         )
 
-        # Build highly robust clinical instruction bundle
         prompt_payload = f"Case Study ID: {payload.case_id}\n"
         if ehr_context:
             prompt_payload += ehr_context
