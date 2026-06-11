@@ -7,9 +7,28 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/openseadragon.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body { display: flex; height: 100vh; background: #0f111a; color: #e2e8f0; }
-        #leftPanel { width: 55%; height: 100%; border-right: 1px solid #2d3748; display: flex; flex-direction: column; position: relative; }
-        #osdViewer { width: 100%; flex-grow: 1; background: #1a202c; position: relative; }
+        body { display: flex; height: 100vh; background: #0f111a; color: #e2e8f0; overflow: hidden; }
+        
+        /* Layout Structure */
+        #leftPanel { width: 55%; height: 100%; border-right: 1px solid #2d3748; display: flex; flex-direction: column; background: #161925; }
+        #osdContainer { width: 100%; height: 50%; background: #1a202c; position: relative; border-bottom: 1px solid #2d3748; }
+        #osdViewer { width: 100%; height: 100%; }
+        
+        /* EHR Form Workspace Styling */
+        #ehrContainer { width: 100%; height: 50%; display: flex; flex-direction: column; background: #161925; overflow-y: auto; padding: 15px; }
+        .ehr-title { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; color: #a0aec0; margin-bottom: 12px; font-weight: bold; display: flex; align-items: center; gap: 6px; }
+        .ehr-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        .form-group { display: flex; flex-direction: column; gap: 5px; }
+        .form-group.full-width { grid-column: span 2; }
+        label { font-size: 0.8rem; color: #718096; font-weight: 600; }
+        input, select, textarea { background: #222533; border: 1px solid #2d3748; border-radius: 6px; padding: 8px 12px; color: white; font-size: 0.85rem; outline: none; transition: 0.2s; }
+        input:focus, select:focus, textarea:focus { border-color: #00e6ff; box-shadow: 0 0 5px rgba(0, 230, 255, 0.2); }
+        textarea { resize: none; height: 60px; }
+
+        /* Crosshair Selection Overlay */
+        #selectionOverlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; display: none; cursor: crosshair; }
+        .roi-drag-box { position: absolute; border: 2px dashed #00e6ff; background: rgba(0, 230, 255, 0.15); box-shadow: 0 0 8px rgba(0,230,255,0.5); pointer-events: none; }
+
         #toolbar { padding: 12px; background: #1a1d24; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid #2d3748; }
         .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
         .preset-badge { background: #2b6cb0; padding: 6px 12px; border-radius: 4px; font-size: 0.85rem; cursor: pointer; transition: 0.2s; }
@@ -17,8 +36,8 @@
         .url-input { background: #2d3748; border: 1px solid #4a5568; padding: 6px 12px; border-radius: 4px; color: white; font-size: 0.85rem; flex-grow: 1; }
         .action-btn { background: #4a5568; color: white; padding: 6px 12px; border-radius: 4px; border: none; font-size: 0.85rem; cursor: pointer; }
         .action-btn:hover { background: #718096; }
-        #captureBtn { position: absolute; bottom: 20px; right: 20px; z-index: 99; padding: 10px 16px; background: #e53e3e; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-        #captureBtn:hover { background: #fc8181; }
+        
+        #modeIndicator { position: absolute; top: 15px; left: 15px; z-index: 20; padding: 6px 12px; background: rgba(15,17,26,0.85); border: 1px solid #4a5568; border-radius: 20px; font-size: 0.8rem; pointer-events: none; display: none; align-items: center; gap: 6px; }
         
         #rightPanel { width: 45%; height: 100%; display: flex; flex-direction: column; background: #12141c; }
         #chatHistory { flex-grow: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
@@ -28,7 +47,7 @@
         #inputArea { padding: 15px; background: #1a1d24; border-top: 1px solid #2d3748; display: flex; gap: 10px; }
         #userInput { flex-grow: 1; background: #2d3748; border: none; border-radius: 6px; padding: 12px; color: white; font-size: 0.95rem; }
         #sendBtn { padding: 12px 20px; background: #3182ce; border: none; color: white; font-weight: bold; border-radius: 6px; cursor: pointer; }
-        .roi-preview { max-width: 150px; border: 2px solid #3182ce; border-radius: 4px; margin-top: 6px; display: block; }
+        .roi-preview { max-width: 180px; border: 2px solid #00e6ff; border-radius: 4px; margin-top: 8px; display: block; }
     </style>
 </head>
 <body>
@@ -37,8 +56,8 @@
         <div id="toolbar">
             <div class="row">
                 <span style="font-size: 0.85rem; color: #a0aec0; font-weight: bold;">Presets:</span>
-                <span class="preset-badge" onclick="loadHESlide('https://upload.wikimedia.org/wikipedia/commons/4/43/Infiltrating_ductal_carcinoma_of_the_breast_histopathology_%282%29.jpg', 'TCGA-BRCA')">Breast H&E</span>
-                <span class="preset-badge" onclick="loadHESlide('https://upload.wikimedia.org/wikipedia/commons/d/da/Adenocarcinoma_of_lung_histopathology_%281%29.jpg', 'TCGA-LUAD')">Lung H&E</span>
+                <span class="preset-badge" onclick="loadHESlide('https://upload.wikimedia.org/wikipedia/commons/4/43/Infiltrating_ductal_carcinoma_of_the_breast_histopathology_%282%29.jpg', 'TCGA-BRCA', '56', 'Male')">Breast H&E</span>
+                <span class="preset-badge" onclick="loadHESlide('https://upload.wikimedia.org/wikipedia/commons/d/da/Adenocarcinoma_of_lung_histopathology_%281%29.jpg', 'TCGA-LUAD', '62', 'Female')">Lung H&E</span>
             </div>
             <div class="row">
                 <input type="text" id="customUrlInput" class="url-input" placeholder="Paste custom image URL here...">
@@ -47,13 +66,52 @@
                 <button class="action-btn" style="background: #2b6cb0;" onclick="document.getElementById('localFileUploader').click()">📁 Upload H&E</button>
             </div>
         </div>
-        <div id="osdViewer"></div>
-        <button id="captureBtn" onclick="captureROI()">📸 Capture Region of Interest (ROI)</button>
+        
+        <div id="osdContainer">
+            <div id="modeIndicator">🎯 <span style="color:#00e6ff; font-weight:bold;">Ctrl + Drag Mode:</span> Draw your ROI box</div>
+            <div id="osdViewer"></div>
+            <div id="selectionOverlay"></div>
+        </div>
+
+        <div id="ehrContainer">
+            <div class="ehr-title">📋 Electronic Health Record Context (Optional)</div>
+            <div class="ehr-grid">
+                <div class="form-group">
+                    <label>Patient Age</label>
+                    <input type="number" id="ehrAge" placeholder="e.g. 56">
+                </div>
+                <div class="form-group">
+                    <label>Biological Sex</label>
+                    <select id="ehrSex">
+                        <option value="">Select...</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Biomarker / Lab Status</label>
+                    <input type="text" id="ehrBiomarkers" placeholder="e.g. HER2+, ER-, PR+">
+                </div>
+                <div class="form-group">
+                    <label>Clinical Staging</label>
+                    <input type="text" id="ehrStage" placeholder="e.g. T2N1M0 Stage IIB">
+                </div>
+                <div class="form-group full-width">
+                    <label>Relevant Clinical History / Co-morbidities</label>
+                    <textarea id="ehrHistory" placeholder="Type background clinical indications, smoking history, familial predispositions..."></textarea>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="rightPanel">
         <div id="chatHistory">
-            <div class="message ai-msg"><strong>PathChat Workspace Active:</strong> Load an H&E slide using the presets, a direct web link, or your local device. Zoom to an analytical area and click capture to run evaluations.</div>
+            <div class="message ai-msg">
+                <strong>Interactive Workspace Active:</strong><br>
+                • Load a slide asset and hold down <strong>[ Ctrl ] + Drag</strong> to capture an explicit tissue structural area.<br>
+                • Fill out the new <strong>EHR Form Fields</strong> below the figure to supply matching multi-modal clinical history context parameters directly to the LLM agent model!
+            </div>
         </div>
         <div id="inputArea">
             <input type="text" id="userInput" placeholder="Ask a diagnostic question about this area...">
@@ -64,14 +122,16 @@
     <script>
         let viewer = null;
         let activeImageUrl = "";
-        let currentROI = null; 
+        let currentROI = null;
+
+        let isDrawing = false;
+        let startX = 0, startY = 0;
+        let dragBox = null;
 
         function initViewer(url) {
             activeImageUrl = url;
-            document.getElementById('captureBtn').style.display = 'block';
-            
+            document.getElementById('modeIndicator').style.display = 'flex';
             if (viewer) { viewer.destroy(); }
-
             viewer = OpenSeadragon({
                 id: "osdViewer",
                 prefixUrl: "https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/images/",
@@ -79,50 +139,109 @@
                 showNavigationControl: false,
                 crossOriginPolicy: 'Anonymous'
             });
+            setupCaptureEngine();
         }
 
-        function loadHESlide(url, caseId) {
+        function loadHESlide(url, caseId, age, sex) {
             initViewer(url);
-            document.getElementById('userInput').value = `Evaluating specimen slice parameters for ${caseId}. Describe structural patterns seen here.`;
+            // Autofill EHR baseline properties if choosing a preset
+            document.getElementById('ehrAge').value = age;
+            document.getElementById('ehrSex').value = sex;
+            document.getElementById('ehrBiomarkers').value = caseId === 'TCGA-BRCA' ? 'HER2 Neg, ER+, PR+' : 'EGFR Mutation Detected';
+            document.getElementById('ehrStage').value = 'Stage II';
+            document.getElementById('ehrHistory').value = `Patient presents for secondary evaluation of a persistent nodular lesion in local tissue structures. No prior targeted interventions.`;
+            
+            document.getElementById('userInput').value = `Cross-referencing cellular structures with current EHR clinical registry fields. Summarize localized pathology insights.`;
         }
 
-        // Feature 1: Load custom remote asset URLs dynamically
         function loadCustomUrl() {
             const url = document.getElementById('customUrlInput').value.trim();
             if (!url) return;
             initViewer(url);
-            document.getElementById('userInput').value = `Evaluating pathology features from remote image asset channel. Describe any cellular anomalies.`;
         }
 
-        // Feature 2: Convert local file uploads into sandboxed browser pointers for OpenSeadragon
         function loadLocalFile(event) {
             const file = event.target.files[0];
             if (!file) return;
-
             const blobUrl = URL.createObjectURL(file);
             initViewer(blobUrl);
-            
-            // Tag the image source identifier as local so backend handles it elegantly
             activeImageUrl = "local-device-upload";
-            document.getElementById('userInput').value = `Analyzing local H&E upload (${file.name}). Provide a morphology assessment.`;
         }
 
-        function captureROI() {
+        function setupCaptureEngine() {
+            const container = document.getElementById('osdContainer');
+            const overlay = document.getElementById('selectionOverlay');
+
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Control') {
+                    overlay.style.display = 'block';
+                    if(viewer) viewer.setMouseNavEnabled(false);
+                }
+            });
+            window.addEventListener('keyup', (e) => {
+                if (e.key === 'Control') {
+                    overlay.style.display = 'none';
+                    if(viewer) viewer.setMouseNavEnabled(true);
+                }
+            });
+
+            container.addEventListener('mousedown', (e) => {
+                if (!e.ctrlKey || !viewer) return;
+                isDrawing = true;
+                const rect = container.getBoundingClientRect();
+                startX = e.clientX - rect.left;
+                startY = e.clientY - rect.top;
+                dragBox = document.createElement('div');
+                dragBox.className = 'roi-drag-box';
+                dragBox.style.left = startX + 'px';
+                dragBox.style.top = startY + 'px';
+                container.appendChild(dragBox);
+            });
+
+            container.addEventListener('mousemove', (e) => {
+                if (!isDrawing || !dragBox) return;
+                const rect = container.getBoundingClientRect();
+                const currentX = e.clientX - rect.left;
+                const currentY = e.clientY - rect.top;
+                const width = currentX - startX;
+                const height = currentY - startY;
+                dragBox.style.width = Math.abs(width) + 'px';
+                dragBox.style.height = Math.abs(height) + 'px';
+                dragBox.style.left = (width > 0 ? startX : currentX) + 'px';
+                dragBox.style.top = (height > 0 ? startY : currentY) + 'px';
+            });
+
+            container.addEventListener('mouseup', (e) => {
+                if (!isDrawing) return;
+                isDrawing = false;
+                processCrop(dragBox.getBoundingClientRect(), container.getBoundingClientRect());
+                if (dragBox) { dragBox.remove(); dragBox = null; }
+            });
+        }
+
+        function processCrop(boxRect, containerRect) {
             if (!viewer || !viewer.drawer || !viewer.drawer.canvas) return;
             const canvas = viewer.drawer.canvas;
-            
+            const scaleX = canvas.width / containerRect.width;
+            const scaleY = canvas.height / containerRect.height;
+            const cropX = (boxRect.left - containerRect.left) * scaleX;
+            const cropY = (boxRect.top - containerRect.top) * scaleY;
+            const cropW = boxRect.width * scaleX;
+            const cropH = boxRect.height * scaleY;
+
+            if (cropW < 10 || cropH < 10) return;
+
             const outputCanvas = document.createElement('canvas');
-            outputCanvas.width = 400;
-            outputCanvas.height = 300;
+            outputCanvas.width = 240;
+            outputCanvas.height = 180;
             const outputContext = outputCanvas.getContext('2d');
-            outputContext.drawImage(canvas, 0, 0, canvas.width, canvas.height, 0, 0, 400, 300);
-            
-            currentROI = outputCanvas.toDataURL('image/jpeg', 0.85);
+            outputContext.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, 240, 180);
+            currentROI = outputCanvas.toDataURL('image/jpeg', 0.9);
 
             const history = document.getElementById('chatHistory');
             history.innerHTML += `
-                <div class="message user-msg" style="background:#2b6cb0;">
-                    <strong>[Region Captured]</strong> Staged current magnification view area into query memory channel.
+                <div class="message user-msg" style="background:#00e6ff; color:#12141c; font-weight:bold;">
+                    <strong>[ROI Matrix Target Staged]</strong> Linked dynamic regional clip coordinates to processing memory queue.
                     <img class="roi-preview" src="${currentROI}" />
                 </div>`;
             history.scrollTop = history.scrollHeight;
@@ -138,13 +257,23 @@
             inputField.value = '';
             history.scrollTop = history.scrollHeight;
 
+            // Gather the live state of all EHR input forms
+            const ehrData = {
+                age: document.getElementById('ehrAge').value,
+                sex: document.getElementById('ehrSex').value,
+                biomarkers: document.getElementById('ehrBiomarkers').value,
+                staging: document.getElementById('ehrStage').value,
+                clinical_notes: document.getElementById('ehrHistory').value
+            };
+
             try {
                 const response = await fetch('/api/v1/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         case_id: "CASE-" + Math.floor(Math.random() * 10000),
-                        clinical_history: query,
+                        // Wrap EHR metadata inside clinical query transmission block
+                        clinical_history: JSON.stringify({ user_prompt: query, ehr_profile: ehrData }),
                         image_metadata: { 
                             stain: "H&E", 
                             image_url: activeImageUrl,
@@ -169,7 +298,7 @@
                 history.innerHTML += `<div class="message ai-msg">${aiResponse}</div>`;
                 currentROI = null; 
             } catch (err) {
-                history.innerHTML += `<div class="message ai-msg"><strong>Error:</strong> Network tracking failure.</div>`;
+                history.innerHTML += `<div class="message ai-msg"><strong>Error:</strong> Backend transmission drop.</div>`;
             }
             history.scrollTop = history.scrollHeight;
         }
