@@ -37,10 +37,13 @@ class PathologyOrchestrator:
                 f"• Patient Demographics: Age {profile.get('age', 'N/A')} | Sex: {profile.get('sex', 'N/A')}\n"
                 f"• Molecular/Biomarker Assays: {profile.get('biomarkers', 'None listed')}\n"
                 f"• Background History Logs: {profile.get('summary_notes', 'None recorded')}\n"
-                if profile.get('attached_document_raw') : f"• Attached Diagnostic File Contents:\n{profile.get('attached_document_raw')}\n" else ""
-                f"----------------------------------------------------------\n"
             )
-        except Exception:
+            if profile.get('attached_document_raw'):
+                    ehr_context += f"• Attached Diagnostic File Contents:\n{profile.get('attached_document_raw')}\n"
+                    
+                ehr_context += "----------------------------------------------------------\n"
+        except Exception as e:
+            print(f"[Orchestrator Parse Error Log]: {str(e)}")
             pass
 
         system_instruction = (
