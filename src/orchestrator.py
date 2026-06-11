@@ -1,7 +1,7 @@
 import os
 import json
 from pydantic import BaseModel
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from huggingface_hub import InferenceClient
 
 class CasePayload(BaseModel):
@@ -14,8 +14,12 @@ class PathologyOrchestrator:
         self.hf_token = os.getenv("HF_TOKEN")
         self.client = InferenceClient(token=self.hf_token)
         
-        # --- FIX: Updated target path identifier to use the active production cluster ---
-        self.model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+        # Prioritized list of high-performance instruction models on the serverless hub
+        self.model_pool: List[str] = [
+            "meta-llama/Meta-Llama-3-8B-Instruct",
+            "Qwen/Qwen2.5-7B-Instruct",
+            "mistralai/Mistral-7B-Instruct-v0.3"
+        ]
 
     async def process_case(self, payload: CasePayload) -> Dict[str, Any]:
         if not self.hf_token:
@@ -38,9 +42,10 @@ class PathologyOrchestrator:
                 f"• Molecular/Biomarker Assays: {profile.get('biomarkers', 'None listed')}\n"
                 f"• Background History Logs: {profile.get('summary_notes', 'None recorded')}\n"
             )
+            
             if profile.get('attached_document_raw'):
-                    ehr_context += f"• Attached Diagnostic File Contents:\n{profile.get('attached_document_raw')}\n"
-                    
+                ehr_context += f"• Attached Diagnostic File Contents:\n{profile.get('attached_document_raw')}\n"
+                
             ehr_context += "----------------------------------------------------------\n"
         except Exception as e:
             print(f"[Orchestrator Parse Error Log]: {str(e)}")
@@ -62,22 +67,36 @@ class PathologyOrchestrator:
             
         prompt_payload += f"Diagnostic User Query: {user_prompt}\n\nFormulate Pathology Assessment Report:"
 
-        try:
-            chat_completion = self.client.chat_completion(
-                model=self.model_id,
-                messages=[
-                    {"role": "system", "content": system_instruction},
-                    {"role": "user", "content": prompt_payload}
-                ],
-                max_tokens=450,
-                temperature=0.2
-            )
-            
-            response_text = chat_completion.choices[0].message.content
-            return {
-                "status": "success",
-                "case_id": payload.case_id,
-                "model_output": [{"generated_text": response_text}]
-            }
-        except Exception as e:
-            return {"status": "error", "detail": f"Hugging Face Inference Cluster failed: {str(e)}"}
+        # Sequentially loop through the model pool if any endpoint is down
+        last_error = ""
+        for model_id in self.model_pool:
+            try:
+                print(f"[Orchestrator Log]: Attempting inference on {model_id}...")
+                chat_completion = self.client.chat_completion(
+                    model=model_id,
+                    messages=[
+                        {"role": "system", "content": system_instruction},
+                        {"role": "user", "content": prompt_payload}
+                    ],
+                    max_tokens=450,
+                    temperature=0.2
+                )
+                
+                response_text = chat_completion.choices[0].message.content
+                print(f"[Orchestrator Log]: Success using {model_id}")
+                return {
+                    "status": "success",
+                    "case_id": payload.case_id,
+                    "active_model": model_id,
+                    "model_output": [{"generated_text": response_text}]
+                }
+            except Exception as e:
+                last_error = str(e)
+                print(f"[Orchestrator Warning]: Model {model_id} failed or unavailable. Trying fallback...")
+                continue
+                
+        # If all models in the pool fail, return a descriptive error
+        return {
+            "status": "error", 
+            "detail": f"All available models in the fallback cluster pool failed. Last reported error: {last_error}"
+        }
