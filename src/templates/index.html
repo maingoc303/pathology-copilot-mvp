@@ -13,7 +13,6 @@
         #osdContainer { width: 100%; height: 50%; background: #1a202c; position: relative; border-bottom: 1px solid #2d3748; }
         #osdViewer { width: 100%; height: 100%; }
         
-        /* Plotly-Style Mode Controller UI Toolbar Overlay */
         .plotly-mode-bar {
             position: absolute; top: 12px; right: 12px; z-index: 100;
             background: rgba(26, 29, 36, 0.9); border: 1px solid #4a5568;
@@ -28,15 +27,8 @@
         .mode-btn:hover { color: white; background: #2d3748; }
         .mode-btn.active { color: #00e6ff; background: #1a365d; border: 1px solid #00e6ff; }
 
-        /* Dynamic Selector Guide Layer */
-        #selectionOverlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 50; display: none; cursor: crosshair;
-        }
-        .roi-drag-box {
-            position: absolute; border: 2px dashed #00e6ff; background: rgba(0, 230, 255, 0.15);
-            box-shadow: 0 0 8px rgba(0,230,255,0.5); pointer-events: none;
-        }
+        #selectionOverlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 50; display: none; cursor: crosshair; }
+        .roi-drag-box { position: absolute; border: 2px dashed #00e6ff; background: rgba(0, 230, 255, 0.15); box-shadow: 0 0 8px rgba(0,230,255,0.5); pointer-events: none; }
 
         #ehrContainer { width: 100%; height: 50%; display: flex; flex-direction: column; background: #161925; overflow-y: auto; padding: 15px; }
         .ehr-title { font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; color: #a0aec0; margin-bottom: 12px; font-weight: bold; display: flex; align-items: center; justify-content: space-between; }
@@ -51,10 +43,11 @@
         #toolbar { padding: 12px; background: #1a1d24; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid #2d3748; }
         .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
         .preset-badge { background: #2b6cb0; padding: 6px 12px; border-radius: 4px; font-size: 0.85rem; cursor: pointer; }
-        .url-input { background: #2d3748; border: 1px solid #4a5568; padding: 6px 12px; border-radius: 4px; color: white; font-size: 0.85rem; flex-grow: 1; }
         .action-btn { background: #4a5568; color: white; padding: 6px 12px; border-radius: 4px; border: none; font-size: 0.85rem; cursor: pointer; }
         
+        /* Right Chat Panel Components */
         #rightPanel { width: 45%; height: 100%; display: flex; flex-direction: column; background: #12141c; }
+        #rightHeader { padding: 12px 20px; background: #1a1d24; border-bottom: 1px solid #2d3748; display: flex; justify-content: space-between; align-items: center; }
         #chatHistory { flex-grow: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
         .message { padding: 12px 16px; border-radius: 8px; max-width: 85%; font-size: 0.95rem; line-height: 1.5; }
         .user-msg { background: #2d3748; align-self: flex-end; color: #fff; }
@@ -63,6 +56,9 @@
         #userInput { flex-grow: 1; background: #2d3748; border: none; border-radius: 6px; padding: 12px; color: white; font-size: 0.95rem; }
         #sendBtn { padding: 12px 20px; background: #3182ce; border: none; color: white; font-weight: bold; border-radius: 6px; cursor: pointer; }
         .roi-preview { max-width: 180px; border: 2px solid #00e6ff; border-radius: 4px; margin-top: 8px; display: block; }
+        
+        .download-report-btn { background: #10b981; color: white; font-weight: bold; padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: 0.2s; display: flex; align-items: center; gap: 6px; }
+        .download-report-btn:hover { background: #059669; }
     </style>
 </head>
 <body>
@@ -87,7 +83,6 @@
                 <button id="panModeBtn" class="mode-btn active" onclick="setInteractionMode('pan')">🔍 Pan & Zoom</button>
                 <button id="selectModeBtn" class="mode-btn" onclick="setInteractionMode('select')">🎯 Select Region</button>
             </div>
-            
             <div id="osdViewer"></div>
             <div id="selectionOverlay"></div>
         </div>
@@ -128,8 +123,12 @@
     </div>
 
     <div id="rightPanel">
+        <div id="rightHeader">
+            <span style="font-weight: bold; color: #a0aec0;">Diagnostic Evaluation Stream</span>
+            <button class="download-report-btn" onclick="downloadClinicalReport()">📥 Download Case Report</button>
+        </div>
         <div id="chatHistory">
-            <div class="message ai-msg"><strong>Interactive Workspace Active:</strong> Use the top-right toolbar buttons to switch modes. In <strong>Select Region</strong> mode, simply click and drag anywhere over the image to crop it directly into your chat workflow—just like Plotly!</div>
+            <div class="message ai-msg"><strong>Workspace Consultation Channel Active:</strong> Complete your spatial box selection evaluation. When the consultation cycle is complete, hit the <strong>Download Case Report</strong> button above to download the compiled PDF overview.</div>
         </div>
         <div id="inputArea">
             <input type="text" id="userInput" placeholder="Ask a diagnostic question about this area...">
@@ -142,8 +141,9 @@
         let activeImageUrl = "";
         let currentROI = null;
         let uploadedDocContent = ""; 
+        let lastModelDiagnosticOutput = "No active analysis run for this case workspace yet."; // Cache last analysis block
         
-        let currentMode = "pan"; // Modes: 'pan' or 'select'
+        let currentMode = "pan";
         let isDrawing = false;
         let startX = 0, startY = 0;
         let dragBox = null;
@@ -158,34 +158,27 @@
                 showNavigationControl: false,
                 crossOriginPolicy: 'Anonymous'
             });
-            
-            // Enforce current active tool interaction state on new image load
-            viewer.addHandler('open', () => {
-                setInteractionMode(currentMode);
-            });
-            
+            viewer.addHandler('open', () => { setInteractionMode(currentMode); });
             setupPlotlySelectionEngine();
         }
 
-        // Handle Plotly Mode Toggling Options
         function setInteractionMode(mode) {
             currentMode = mode;
             const overlay = document.getElementById('selectionOverlay');
             const panBtn = document.getElementById('panModeBtn');
             const selectBtn = document.getElementById('selectModeBtn');
-
             if (!viewer) return;
 
             if (mode === "select") {
                 panBtn.classList.remove('active');
                 selectBtn.classList.add('active');
                 overlay.style.display = 'block';
-                viewer.setMouseNavEnabled(false); // Disable core panning while drawing
+                viewer.setMouseNavEnabled(false);
             } else {
                 selectBtn.classList.remove('active');
                 panBtn.classList.add('active');
                 overlay.style.display = 'none';
-                viewer.setMouseNavEnabled(true); // Re-enable standard pan/zoom interaction
+                viewer.setMouseNavEnabled(true);
             }
         }
 
@@ -196,11 +189,9 @@
             overlay.addEventListener('mousedown', (e) => {
                 if (currentMode !== 'select') return;
                 isDrawing = true;
-                
                 const rect = container.getBoundingClientRect();
                 startX = e.clientX - rect.left;
                 startY = e.clientY - rect.top;
-
                 dragBox = document.createElement('div');
                 dragBox.className = 'roi-drag-box';
                 dragBox.style.left = startX + 'px';
@@ -213,10 +204,8 @@
                 const rect = container.getBoundingClientRect();
                 const currentX = e.clientX - rect.left;
                 const currentY = e.clientY - rect.top;
-
                 const width = currentX - startX;
                 const height = currentY - startY;
-
                 dragBox.style.width = Math.abs(width) + 'px';
                 dragBox.style.height = Math.abs(height) + 'px';
                 dragBox.style.left = (width > 0 ? startX : currentX) + 'px';
@@ -226,15 +215,8 @@
             overlay.addEventListener('mouseup', (e) => {
                 if (!isDrawing) return;
                 isDrawing = false;
-
                 processCrop(dragBox.getBoundingClientRect(), container.getBoundingClientRect());
-
-                if (dragBox) {
-                    dragBox.remove();
-                    dragBox = null;
-                }
-                
-                // Automatically switch back to Pan & Zoom mode for standard navigation fluidly
+                if (dragBox) { dragBox.remove(); dragBox = null; }
                 setInteractionMode('pan');
             });
         }
@@ -242,10 +224,8 @@
         function processCrop(boxRect, containerRect) {
             if (!viewer || !viewer.drawer || !viewer.drawer.canvas) return;
             const canvas = viewer.drawer.canvas;
-            
             const scaleX = canvas.width / containerRect.width;
             const scaleY = canvas.height / containerRect.height;
-
             const cropX = (boxRect.left - containerRect.left) * scaleX;
             const cropY = (boxRect.top - containerRect.top) * scaleY;
             const cropW = boxRect.width * scaleX;
@@ -275,7 +255,7 @@
             document.getElementById('ehrSex').value = sex;
             document.getElementById('ehrBiomarkers').value = caseId === 'TCGA-BRCA' ? 'HER2 Neg, ER+, PR+' : 'EGFR Mutation';
             document.getElementById('ehrHistory').value = `Specimen source: ${caseId} tissue map registry.`;
-            document.getElementById('userInput').value = `Analyze structural variations within this chosen target area.`;
+            document.getElementById('userInput').value = `Provide structural overview metrics and report findings.`;
         }
 
         function parseEHRDocument(event) {
@@ -336,6 +316,8 @@
                 
                 if (data.status === "success") {
                     let rawText = data.model_output[0]?.generated_text || "";
+                    lastModelDiagnosticOutput = rawText; // Cache text execution result safely
+                    
                     rawText = rawText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
                     rawText = rawText.replace(/\n\n/g, '</p><p style="margin-top: 8px;">');
                     rawText = rawText.replace(/\n/g, '<br>');
@@ -350,6 +332,45 @@
                 history.innerHTML += `<div class="message ai-msg"><strong>Error:</strong> Backend transmission drop.</div>`;
             }
             history.scrollTop = history.scrollHeight;
+        }
+
+        // --- NEW COMPILING METHOD: STAGES POST AND DOWNLOADS RENDERED DOCUMENT BLOB ---
+        async function downloadClinicalReport() {
+            const reportPayload = {
+                age: document.getElementById('ehrAge').value || "N/A",
+                sex: document.getElementById('ehrSex').value || "N/A",
+                biomarkers: document.getElementById('ehrBiomarkers').value || "None Listed",
+                clinical_notes: document.getElementById('ehrHistory').value || "No background details recorded.",
+                diagnostic_findings: lastModelDiagnosticOutput,
+                roi_image_b64: currentROI // Include latest captured region if present
+            };
+
+            try {
+                const btn = document.querySelector('.download-report-btn');
+                btn.innerText = "⏳ Building Report...";
+                
+                const response = await fetch('/api/v1/download-report', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(reportPayload)
+                });
+
+                if (!response.ok) throw new Error("PDF transformation execution crash.");
+
+                const blob = await response.blob();
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = `PATHOLOGY_CASE_REPORT_${Math.floor(Math.random()*100000)}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                
+                btn.innerHTML = "📥 Download Case Report";
+            } catch (err) {
+                alert("Report Generation Error: Could not compile document vector targets.");
+                console.error(err);
+            }
         }
     </script>
 </body>

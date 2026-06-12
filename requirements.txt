@@ -3,3 +3,6 @@ uvicorn>=0.31.0
 pydantic>=2.9.0
 python-multipart>=0.0.22
 huggingface_hub>=0.22.0
+# generating report for downloading
+weasyprint==61.2
+pydantic==2.6.1
