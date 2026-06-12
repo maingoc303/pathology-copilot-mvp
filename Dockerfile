@@ -8,16 +8,16 @@ ENV PORT=10000
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies if needed later (e.g., libGL for image processing)
+# Install system dependencies with correct shell chaining syntax
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     python3-dev \
     libpango-1.0-0 \
     libharfbuzz0b \
     libpangoft2-1.0-0 \
-    libggi2 \
     libglib2.0-0 \
-    &.amp;amp;&.amp;amp; rm -rf /var/lib/apt/lists/*
+    libgl1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Python requirements
 COPY requirements.txt .
