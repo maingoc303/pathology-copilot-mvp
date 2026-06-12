@@ -51,7 +51,7 @@ try:
 except ImportError:
     pass
 
-router = APIRouter()
+#router = APIRouter()
 
 class ReportPayload(BaseModel):
     age: str
@@ -61,7 +61,7 @@ class ReportPayload(BaseModel):
     diagnostic_findings: str
     roi_image_b64: Optional[str] = None
 
-@router.post("/api/v1/download-report")
+@app.post("/api/v1/download-report")
 async def generate_pdf_report(payload: ReportPayload):
     # Construct an elegant, print-ready, high-resolution pathology template
     roi_html_element = ""
