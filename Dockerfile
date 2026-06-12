@@ -11,7 +11,13 @@ WORKDIR /app
 # Install system dependencies if needed later (e.g., libGL for image processing)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    python3-dev \
+    libpango-1.0-0 \
+    libharfbuzz0b \
+    libpangoft2-1.0-0 \
+    libggi2 \
+    libglib2.0-0 \
+    &.amp;amp;&.amp;amp; rm -rf /var/lib/apt/lists/*
 
 # Install Python requirements
 COPY requirements.txt .
@@ -24,4 +30,4 @@ COPY src/ ./src/
 EXPOSE 10000
 
 # Run the application binding to Render's configuration
-CMD uvicorn src.main:app --host 0.0.0.0 --port $PORT
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "10000"]
